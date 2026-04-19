@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat with Peer - BKSysNet</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Badge hiển thị Tên chủ tài khoản đang đăng nhập, đặt ngoài khung chat -->
+    <div
+      style="
+        position: absolute;
+        top: 1.5rem;
+        left: 1.5rem;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 0.5rem 1rem;
+        border-radius: 99px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        border: 1px solid var(--card-border);
+        backdrop-filter: blur(5px);
+      "
+    >
+      👤 Chủ chat:
+      <span id="currentOwnerName" style="color: var(--primary-color)"
+        >Tên bạn</span
+      >
+    </div>
+
+    <div class="container wide">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1px solid var(--card-border);
+          padding-bottom: 1rem;
+          margin-bottom: 1rem;
+        "
+      >
+        <h2 style="margin: 0; color: var(--text-main)">Chat</h2>
+        <span
+          style="
+            font-weight: 600;
+            color: var(--primary-color);
+            background: rgba(79, 70, 229, 0.1);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+          "
+          id="peerName"
+          >Peer</span
+        >
+      </div>
+
+      <div id="chat-wrapper">
+        <div id="messages"></div>
+
+        <div id="input-area">
+          <input
+            id="message-input"
+            type="text"
+            placeholder="Type your message here..."
+          />
+          <button id="send-btn" class="btn">Send</button>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top: 1.5rem">
+        <button
+          class="btn btn-secondary"
+          onclick="window.location.href = '/view-my-channels'"
+        >
+          Back to Channels
+        </button>
+      </div>
+    </div>
+
+    <script src="chat.js"></script>
+  </body>
+</html>

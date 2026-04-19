@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - BKSysNet</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* Ẩn con mắt hiển thị mật khẩu mặc định của trình duyệt Edge/Windows */
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Welcome Back</h2>
+  <p style="color: var(--text-muted); margin-bottom: 2rem;">Sign in to continue</p>
+  
+  <form id="loginForm" method="POST" action="/login">
+    <div class="form-group">
+      <label>Username</label>
+      <input name="username" type="text" placeholder="Enter your username" required>
+    </div>
+    
+    <div class="form-group" style="position: relative;">
+      <label>Password</label>
+      <input id="passwordInput" name="password" type="password" placeholder="Enter your password" required style="padding-right: 2.5rem;">
+      <span id="togglePassword" style="position: absolute; right: 10px; top: 38px; cursor: pointer; color: var(--text-muted); user-select: none;" title="Hiện mật khẩu">
+        <svg id="eyeOpen" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        <svg id="eyeClosed" style="display: none;" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+      </span>
+    </div>
+    
+    <button type="submit" class="btn" style="margin-top: 1rem;">Sign In</button>
+  </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // Lấy tracker IP + port hiện tại từ URL
+    const trackerIP = window.location.hostname; // ví dụ 127.0.0.1
+    const trackerPort = window.location.port;   // ví dụ 9000
+    localStorage.setItem("trackerIP", trackerIP);
+    localStorage.setItem("trackerPort", trackerPort);
+    
+    // Logic ẩn/hiện mật khẩu
+    const togglePassword = document.getElementById("togglePassword");
+    const passwordInput = document.getElementById("passwordInput");
+    const eyeOpen = document.getElementById("eyeOpen");
+    const eyeClosed = document.getElementById("eyeClosed");
+
+    togglePassword.addEventListener("click", function () {
+        const isPassword = passwordInput.getAttribute("type") === "password";
+        passwordInput.setAttribute("type", isPassword ? "text" : "password");
+        
+        // Chuyển đổi SVG
+        eyeOpen.style.display = isPassword ? "none" : "block";
+        eyeClosed.style.display = isPassword ? "block" : "none";
+        this.title = isPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu";
+    });
+});
+
+document.getElementById("loginForm").addEventListener("submit", function(e){
+    e.preventDefault(); 
+
+    const username = this.username.value;
+    const password = this.password.value;
+
+    // Lấy tracker IP + port từ localStorage
+    const trackerIP = localStorage.getItem("trackerIP");
+    const trackerPort = localStorage.getItem("trackerPort");
+
+    fetch(`http://${trackerIP}:${trackerPort}/login`, {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    })
+    .then(resp => resp.ok ? resp.text() : Promise.reject("Login failed"))
+    .then(html => {
+        // Nếu login thành công → redirect sang submit-info page
+        window.location.href = `/`;
+    })
+    .catch(err => alert(err));
+});
+</script>
+
+</body>
+</html>

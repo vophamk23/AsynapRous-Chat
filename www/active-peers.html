@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Peers - BKSysNet</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="active-peers.js" defer></script>
+</head>
+<body>
+
+<div class="container wide">
+  <h2>Available Network Peers</h2>
+  <p style="color: var(--text-muted);">List of peers registered in the tracker.</p>
+
+  <table id="peerTable">
+    <tr>
+      <th>Username</th>
+      <th>IP Address</th>
+      <th>Port</th>
+      <th>Network Action</th>
+    </tr>
+  </table>
+  
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="window.location.href='/view-my-channels'">View My Channels</button>
+  </div>
+</div>
+
+</body>
+</html>

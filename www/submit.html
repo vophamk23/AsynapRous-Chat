@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register Peer - BKSysNet</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="container">
+  <h2>Register Your Peer</h2>
+  <p style="color: var(--text-muted); margin-bottom: 2rem;">Configure your peer endpoint to join the network.</p>
+
+  <form id="submitForm">
+    <div class="form-group">
+      <label>Host IP Address</label>
+      <input name="ip" type="text" placeholder="e.g. 127.0.0.1" required>
+    </div>
+    
+    <div class="form-group">
+      <label>Listening Port</label>
+      <input name="port" type="text" placeholder="e.g. 9001" required>
+    </div>
+    
+    <button type="submit" class="btn" style="margin-top: 1rem;">Register Node</button>
+    <div id="errorMsg" class="error"></div>
+  </form>
+</div>
+
+<script>
+document.getElementById('submitForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+
+    const ip = this.ip.value;
+    const port = this.port.value;
+    const errorDiv = document.getElementById('errorMsg');
+
+    try {
+        // 1. Gửi peer info đến tracker
+        const trackerResp = await fetch('/submit-info', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({ ip, port })
+        });
+        const trackerData = await trackerResp.json();
+
+        if (!trackerResp.ok) {
+            errorDiv.textContent = trackerData.message || 'Submit failed';
+            return;
+        }
+
+        // 2. Lấy tracker IP/Port hiện tại
+        const tracker_ip = window.location.hostname;
+        const tracker_port = window.location.port || "9000";
+        await fetch('/save-tracker', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                trackerIP: window.location.hostname,
+                trackerPort: window.location.port || "9000"
+            })
+        });
+
+        // 3. Redirect sang peer server (peer_ip:peer_port)
+        const peerUrl = `http://${ip}:${port}/view-my-channels`;
+        window.location.href = peerUrl;
+
+    } catch(err) {
+        console.error(err);
+        errorDiv.textContent = 'Error: ' + err.message;
+    }
+});
+</script>
+
