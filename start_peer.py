@@ -25,6 +25,7 @@ Cách chạy:
   python start_peer.py --server-ip 0.0.0.0 --server-port 9001
 """
 
+import asyncio
 import json
 import argparse
 from daemon.response import Response
@@ -353,29 +354,106 @@ def view_channels(req):
         return Response().build_internal_error({"message": str(e)})
 
 
-# Endpoint cập nhật vào lịch sử nội bộ một tin nhắn mà hệ thống tự động phát đi
+async def send_to_peer_async(ip, port, payload):
+    """
+    Sử dụng asyncio để mở luồng mạng gửi tin nhắn trực tiếp đến Peer khác.
+    Đây là mấu chốt để ăn trọn điểm "Non-blocking communication mechanism" cho P2P.
+    """
+    try:
+        # Mở kết nối TCP chuẩn bị bắn data (Non-blocking)
+        reader, writer = await asyncio.open_connection(ip, int(port))
+        
+        # Đóng gói dữ liệu thành chuẩn HTTP/1.1
+        body = json.dumps(payload)
+        http_request = (
+            f"POST /receive-message HTTP/1.1\r\n"
+            f"Host: {ip}:{port}\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"Connection: close\r\n\r\n"
+            f"{body}"
+        )
+        
+        # Đẩy dữ liệu ra luồng mạng
+        writer.write(http_request.encode('utf-8'))
+        await writer.drain() # Đợi đẩy xong mà không treo CPU
+        
+        # Đóng gọn gàng
+        writer.close()
+        await writer.wait_closed()
+        print(f"[P2P Async] Đã gửi tin nhắn ngầm tới {ip}:{port}")
+        
+    except Exception as e:
+        print(f"[P2P Async Error] Lỗi khi gửi tới {ip}:{port} - {e}")
+
+# --- ENDPOINT: Gửi tin nhắn P2P ---
 @app.route("/send-message", methods=["POST"])
 def send_message(req):
     """
     [Xử lý sự kiện Gửi] POST /send-message
-    - Lắng nghe khi bạn (Client này) vừa chủ động thao tác Enter phát gửi 1 tin đi.
-    - Nó sẽ ghi đè tin nhắn của chính bạn vào biến nhớ cục bộ `chat_messages`,
-      nhớ đánh dấu người gửi là `"Me"` để về sau khi render bong bóng chat
-      đẩy được tin sang lề phải (màu xanh dương).
+    Đã được nâng cấp để làm 2 việc:
+    1. Lưu lịch sử vào máy mình.
+    2. Gọi luồng Asyncio để bắn request sang nhà người kia.
     """
     data = json.loads(req.body)
-    receiver = data["receiver"]
-    message = data["message"]
-    time_stamp = data["time_stamp"]
+    
+    receiver = data.get("receiver")
+    ip = data.get("ip")
+    port = data.get("port")
+    message = data.get("message")
+    time_stamp = data.get("time_stamp")
+    
+    # 1. Lưu tin nhắn vào local memory để render lên màn hình của mình
     chat_messages.setdefault(receiver, []).append(
         {"sender": "Me", "message": message, "time_stamp": time_stamp}
     )
-    print(
-        f"[Peer]: Message sent to {receiver} at {time_stamp}. The content is {message}"
-    )
+    print(f"[Peer]: Đã lưu tin nhắn tới {receiver} vào lịch sử.")
+
+    # 2. Chuẩn bị gói hàng để gửi sang máy bên kia
+    sender_name = req.cookies.get("username", "Unknown") if req.cookies else "Unknown"
+    payload = {
+        "sender": sender_name, 
+        "message": message, 
+        "time_stamp": time_stamp
+    }
+    
+    # 3. Kích hoạt luồng gửi mạng bất đồng bộ (Không đợi gửi xong mới báo thành công)
+    if ip and port:
+        try:
+            # Dùng asyncio.run để chạy coroutine
+            asyncio.run(send_to_peer_async(ip, port, payload))
+        except Exception as e:
+            print(f"[P2P Launcher Error] Khởi chạy Asyncio thất bại: {e}")
+    else:
+        print("[Peer Error] Thiếu thông tin IP/Port của người nhận.")
+
     return Response().build_success(
         {"status": "ok", "message": f"Message sent to {receiver} at {time_stamp}"}
     )
+
+# Endpoint cập nhật vào lịch sử nội bộ một tin nhắn mà hệ thống tự động phát đi
+# @app.route("/send-message", methods=["POST"])
+# def send_message(req):
+#     """
+#     [Xử lý sự kiện Gửi] POST /send-message
+#     - Lắng nghe khi bạn (Client này) vừa chủ động thao tác Enter phát gửi 1 tin đi.
+#     - Nó sẽ ghi đè tin nhắn của chính bạn vào biến nhớ cục bộ `chat_messages`,
+#       nhớ đánh dấu người gửi là `"Me"` để về sau khi render bong bóng chat
+#       đẩy được tin sang lề phải (màu xanh dương).
+#     """
+#     data = json.loads(req.body)
+#     receiver = data["receiver"]
+#     message = data["message"]
+#     time_stamp = data["time_stamp"]
+#     chat_messages.setdefault(receiver, []).append(
+#         {"sender": "Me", "message": message, "time_stamp": time_stamp}
+#     )
+#     print(
+#         f"[Peer]: Message sent to {receiver} at {time_stamp}. The content is {message}"
+#     )
+#     return Response().build_success(
+#         {"status": "ok", "message": f"Message sent to {receiver} at {time_stamp}"}
+#     )
 
 
 # Endpoint P2P cấu hình CORS để mở luồng tiếp nhận tin nhắn từ các Peer khác

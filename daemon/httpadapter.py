@@ -158,21 +158,40 @@ class HttpAdapter:
 
             # Kiểm tra cookie xác thực cho GET /index.html
             # Nếu cookie 'auth' không phải 'true' → trả 401 Unauthorized
-            if req.method == "GET" and req.path in ["/index.html"]:
+            public_pages = ["/login.html", "/submit.html"]
+            if req.method == "GET" and req.path.endswith(".html") and req.path not in public_pages:
                 cookie_val = req.cookies.get("auth", "")
                 is_auth = False
                 if cookie_val:
+                    # Lấy giá trị thực của auth, bỏ qua các config phụ như Path=/
                     if cookie_val.split(";", 1)[0].strip() == "true":
                         is_auth = True
+                
                 if not is_auth:
-                    # Chưa xác thực → trả 401
+                    # Chưa xác thực → văng lỗi 401 Unauthorized ngay và luôn
                     result = resp.build_unauthorized()
                     send_and_close(result)
                     return
-                # Đã xác thực → phục vụ trang index.html bình thường
+                
+                # Đã xác thực → phục vụ trang HTML bình thường
                 result = resp.build_response(req)
                 send_and_close(result)
                 return
+            # if req.method == "GET" and req.path in ["/index.html"]:
+            #     cookie_val = req.cookies.get("auth", "")
+            #     is_auth = False
+            #     if cookie_val:
+            #         if cookie_val.split(";", 1)[0].strip() == "true":
+            #             is_auth = True
+            #     if not is_auth:
+            #         # Chưa xác thực → trả 401
+            #         result = resp.build_unauthorized()
+            #         send_and_close(result)
+            #         return
+            #     # Đã xác thực → phục vụ trang index.html bình thường
+            #     result = resp.build_response(req)
+            #     send_and_close(result)
+            #     return
 
             # Nếu có API hook đã được đăng ký → gọi handler tương ứng
             if req.hook:
