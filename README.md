@@ -3,7 +3,6 @@
 > **CO3093/CO3094 – Computer Networks | HCMC University of Technology (VNU-HCM)**
 > Built entirely from scratch using Python standard library — no Flask, no Django.
 
----
 
 ## Table of Contents
 
@@ -20,7 +19,6 @@
 - [Account Management](#account-management)
 - [Technical Design](#technical-design)
 
----
 
 ## Overview
 
@@ -33,14 +31,13 @@ Two client modes are available:
 - **Web UI** (`start_peer.py`) — browser-based chat interface with polling
 - **CLI** (`start_peer_cli.py`) — terminal-based client with multi-channel and broadcast support
 
----
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        HYBRID P2P SYSTEM                        │
-│                                                                  │
+│                                                                 │
 │   ┌──────────────────────────────────────────────────────────┐  │
 │   │              PHASE 1: Client-Server (Tracker)            │  │
 │   │                                                          │  │
@@ -48,15 +45,15 @@ Two client modes are available:
 │   │   Browser ──── POST /submit-info ─► peer_list{}          │  │
 │   │   Browser ──── GET  /get-list  ──► {username: ip:port}   │  │
 │   └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
+│                                                                 │
 │   ┌──────────────────────────────────────────────────────────┐  │
 │   │              PHASE 2: Peer-to-Peer (Direct)              │  │
 │   │                                                          │  │
-│   │   Peer A :9001 ──── POST /receive-message ──► Peer B :9002 │
-│   │   Peer B :9002 ──── POST /receive-message ──► Peer A :9001 │
+│   │   Peer A :9001 ──── POST /receive-message ──► Peer B :9002  │
+│   │   Peer B :9002 ──── POST /receive-message ──► Peer A :9001  │
 │   │               (no Tracker involved)                      │  │
 │   └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
+│                                                                 │
 │   ┌──────────────────────────────────────────────────────────┐  │
 │   │              OPTIONAL: Reverse Proxy                     │  │
 │   │                                                          │  │
@@ -81,7 +78,6 @@ Transport Layer    │  Backend (backend.py)
                    │  TCP socket + Threading / Asyncio / Selectors
 ```
 
----
 
 ## Project Structure
 
@@ -134,7 +130,6 @@ assign1-mmt/
 └── tracker.json                # Auto-generated: tracker IP:Port for peers to read
 ```
 
----
 
 ## Requirements
 
@@ -146,7 +141,6 @@ assign1-mmt/
 python --version
 ```
 
----
 
 ## Quick Start
 
@@ -167,8 +161,6 @@ run_cli.bat
 ```
 
 Launches 7 CMD windows: 2 Trackers (ports 8001, 8002) + 5 CLI peer clients (ports 9001–9005).
-
----
 
 ### Option 2 — Manual launch
 
@@ -194,7 +186,6 @@ python start_proxy.py --server-ip 0.0.0.0 --server-port 8888
 
 > Wait until each terminal shows `[Backend] Port XXXX is ready...` before proceeding.
 
----
 
 ### Step 4 — Register peers via browser
 
@@ -204,7 +195,6 @@ python start_proxy.py --server-ip 0.0.0.0 --server-port 8888
 4. Navigate to `http://127.0.0.1:9001/active-peers` to see other online peers
 5. Click **Connect** next to a peer, then open the chat window
 
----
 
 ## System Ports
 
@@ -220,7 +210,6 @@ python start_proxy.py --server-ip 0.0.0.0 --server-port 8888
 | CLI Tracker 1      | 8001 | Tracker for CLI channel 1                    |
 | CLI Tracker 2      | 8002 | Tracker for CLI channel 2                    |
 
----
 
 ## Key URLs
 
@@ -235,7 +224,7 @@ python start_proxy.py --server-ip 0.0.0.0 --server-port 8888
 | `http://127.0.0.1:9001/chat?peer=MinhDuc&ip=127.0.0.1&port=9002` | Chat: VoPham → MinhDuc |
 | `http://127.0.0.1:9002/chat?peer=VoPham&ip=127.0.0.1&port=9001` | Chat: MinhDuc → VoPham |
 
----
+
 
 ## Features
 
@@ -278,7 +267,7 @@ Cookie-based authentication per RFC 6265 / RFC 7235:
 - `/msg <username>` sends a private 1-to-1 message
 - Channel membership persisted in `<username>_channels.json`
 
----
+
 
 ## API Reference
 
@@ -337,7 +326,6 @@ Available in `start_peer_cli.py`:
 | `/list` | Show all known peers across all channels |
 | `/quit` | Logout from all channels and exit |
 
----
 
 ## Account Management
 
@@ -369,7 +357,6 @@ python db/account.py delete <username>
 python db/account.py reset
 ```
 
----
 
 ## Technical Design
 
