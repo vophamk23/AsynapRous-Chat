@@ -1,5 +1,6 @@
 # AsynapRous-Chat – Hybrid P2P Chat System
-
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-Educational-lightgrey)
 > **CO3093/CO3094 – Computer Networks | HCMC University of Technology (VNU-HCM)**
 > Built entirely from scratch using Python standard library - no Flask, no Django.
 
