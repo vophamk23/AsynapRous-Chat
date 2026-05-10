@@ -1,14 +1,18 @@
 // Khai thác và bóc tách cấu trúc tham số (URL Parameters) làm định danh đích đến
 const urlParams = new URLSearchParams(window.location.search);
-const peerName = urlParams.get("peer");
-const peerIP = urlParams.get("ip");
-console.log(peerIP);
-const peerPort = urlParams.get("port");
-console.log(peerPort);
-const username = document.cookie.match(/username=([^;]+)/)[1];
-console.log(`http://${peerIP}:${peerPort}/receive-message`);
+const peerName = urlParams.get("peer"); // Dùng cho chat 1-1
+const peerIP = urlParams.get("ip"); // Dùng cho chat 1-1
+const peerPort = urlParams.get("port"); // Dùng cho chat 1-1
+const groupName = urlParams.get("group_name"); // Dùng cho chat Nhóm
 
-document.getElementById("peerName").innerText = peerName;
+const username = document.cookie.match(/username=([^;]+)/)[1];
+
+// Thiết lập tiêu đề khung chat
+if (groupName) {
+    document.getElementById("peerName").innerText = "Group: " + groupName;
+} else if (peerName) {
+    document.getElementById("peerName").innerText = peerName;
+}
 
 // Nhận diện và liên kết biến số định danh phiên người dùng hiển thị trực quan lên thành phần DOM
 const ownerLabel = document.getElementById("currentOwnerName");
@@ -35,113 +39,101 @@ function appendMessage(sender, text) {
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-// Điều phối mạch giao thức HTTP đẩy trực tiếp gói tin nhắn tới IP/Port của Peer (P2P Client-Side)
-// async function sendMessage(text) {
-//             if (!peerIP || !peerPort) {
-//                 appendMessage("System", "Peer IP or port missing.");
-//                 return;
-//             }
-//             const now = new Date().toISOString();
-//             try {
-//                 await fetch(`http://${peerIP}:${peerPort}/receive-message`, {
-//                     method: "POST",
-//                     headers: {"Content-Type": "application/json"},
-//                     body: JSON.stringify({"sender": username, "message": text, "time_stamp": now})
-//                 });
-//                 // appendMessage(username, text);
-//             } catch (err) {
-//                 appendMessage("System", "Failed to send message to peer.");
-//             }
-//         }
+// Xử lý gửi tin nhắn (Tự động phân luồng 1-1 hoặc Nhóm)
+async function handleSendMessage(text) {
+    const now = new Date().toISOString();
 
-async function sendMessageToBackend(text) {
-  if (!peerIP || !peerPort) {
-    appendMessage("System", "Peer IP or port missing.");
-    return;
-  }
+    if (groupName) {
+        // [LUỒNG CHAT NHÓM]
+        const trackerIP = localStorage.getItem("trackerIP") || "127.0.0.1";
+        const trackerPort = localStorage.getItem("trackerPort") || "9000";
 
-  const now = new Date().toISOString();
+        try {
+            // 1. Hỏi Tracker lấy danh sách thành viên hiện tại của nhóm
+            const trackerResp = await fetch(`http://${trackerIP}:${trackerPort}/get-group-members?group_name=${encodeURIComponent(groupName)}`);
+            const trackerData = await trackerResp.json();
+            
+            if (!trackerResp.ok) {
+                appendMessage("System", trackerData.message || "Không thể lấy thông tin nhóm.");
+                return;
+            }
 
-  try {
-    await fetch(`/send-message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        receiver: peerName,
-        ip: peerIP,
-        port: peerPort,
-        message: text,
-        time_stamp: now,
-      }),
-    });
+            const membersList = trackerData.members;
 
-    appendMessage("Me", text);
-  } catch (err) {
-    appendMessage("System", "Failed to send message to local backend.");
-  }
+            // 2. Gửi lệnh yêu cầu Peer Server của mình phát sóng tin nhắn
+            await fetch('/send-group-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    group_name: groupName,
+                    message: text,
+                    time_stamp: now,
+                    members: membersList
+                })
+            });
+
+            appendMessage("Me", text); // Hiển thị trên màn hình mình
+        } catch (err) {
+            console.error(err);
+            appendMessage("System", "Failed to send group message.");
+        }
+    } else if (peerName && peerIP && peerPort) {
+        // [LUỒNG CHAT 1-1] (Giữ nguyên logic cũ)
+        try {
+            await fetch(`/send-message`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    receiver: peerName,
+                    ip: peerIP,
+                    port: peerPort,
+                    message: text,
+                    time_stamp: now,
+                }),
+            });
+            appendMessage("Me", text);
+        } catch (err) {
+            appendMessage("System", "Failed to send message to local backend.");
+        }
+    } else {
+        appendMessage("System", "Lỗi: Không tìm thấy đích đến.");
+    }
 }
 
 sendBtn.onclick = () => {
   const text = messageInput.value.trim();
   if (!text) return;
 
-  sendMessageToBackend(text);
+  handleSendMessage(text);
 
   messageInput.value = "";
 };
 
 // Triển khai cơ chế Polling vòng lặp truy vấn lịch sử trò chuyện cục bộ để đồng bộ hóa giao diện
 async function fetchMessages() {
-  if (!peerName) return;
-  try {
-    const resp = await fetch(`/get-messages?peer=${peerName}`);
-    const data = await resp.json();
-    chatWindow.innerHTML = ""; // Clear old messages
-    data.messages.forEach((msg) => {
-      appendMessage(
-        msg.sender,
-        `${msg.message} <small>${msg.time_stamp}</small>`,
-      );
-    });
-  } catch (err) {
-    console.error(err);
-    appendMessage("System", "Failed to fetch messages");
-  }
+    // Sử dụng groupName nếu đang ở chế độ nhóm, ngược lại dùng peerName
+    const targetId = groupName || peerName; 
+    
+    if (!targetId) return;
+    try {
+        const resp = await fetch(`/get-messages?peer=${encodeURIComponent(targetId)}`);
+        const data = await resp.json();
+        chatWindow.innerHTML = ""; // Clear old messages
+        
+        if (data.messages && data.messages.length > 0) {
+            data.messages.forEach((msg) => {
+                appendMessage(
+                    msg.sender,
+                    `${msg.message} <small>${msg.time_stamp}</small>`,
+                );
+            });
+        }
+    } catch (err) {
+        console.error(err);
+    }
 }
 
-// Kích hoạt HTTP Request ghi nhận nhật ký phát tin từ bản thân vào cơ sở dữ liệu Peer Server
-// async function saveMessage(text) {
-//   if (!peerIP || !peerPort) {
-//     appendMessage("System", "Peer IP or port missing.");
-//     return;
-//   }
-//   const now = new Date().toISOString();
-//   try {
-//     await fetch(`/send-message`, {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({
-//         receiver: peerName,
-//         message: text,
-//         time_stamp: now,
-//       }),
-//     });
-//     // appendMessage(username, text);
-//   } catch (err) {
-//     appendMessage("System", "Failed to send message to peer.");
-//   }
-// }
-
-// Thiết lập bộ lắng nghe sự kiện Click (Pointer) điều hướng chu trình phát tin
-// sendBtn.onclick = () => {
-//   const text = messageInput.value.trim();
-//   if (!text) return;
-//   sendMessage(text);
-//   saveMessage(text);
-//   messageInput.value = "";
-// };
-
-// Theo dõi biến thiên bàn phím (Keyboard Event), bổ trợ thao tác phím Enter đệ trình tin nhanh
+// Theo dõi biến thiên bàn phím
 messageInput.addEventListener("keydown", function (event) {
   if (event.key === "Enter") {
     event.preventDefault();
@@ -149,5 +141,5 @@ messageInput.addEventListener("keydown", function (event) {
   }
 });
 
-// Kích hoạt đồng hồ đếm nhịp (Polling Loop) tần số 1000ms kéo tin nhắn P2P theo thời gian thực
+// Kích hoạt đồng hồ đếm nhịp (Polling Loop)
 setInterval(fetchMessages, 1000);

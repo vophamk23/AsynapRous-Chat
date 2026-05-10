@@ -105,6 +105,71 @@ async function loadPeers() {
     table.innerHTML += "<tr><td colspan='4'>Failed to load peers</td></tr>";
   }
 }
+// Logic tạo nhóm
+async function handleCreateGroup() {
+    const groupName = prompt("Nhập tên nhóm bạn muốn tạo:");
+    if (!groupName) return;
+
+    // Lấy username từ trình duyệt
+    const currentUsername = getUsernameFromCookie();
+
+    const trackerIP = localStorage.getItem("trackerIP") || "127.0.0.1";
+    const trackerPort = localStorage.getItem("trackerPort") || "9000";
+
+    try {
+        const resp = await fetch(`http://${trackerIP}:${trackerPort}/create-group`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // NHÉT THÊM USERNAME VÀO ĐÂY
+            body: JSON.stringify({ group_name: groupName, username: currentUsername }) 
+        });
+        const data = await resp.json();
+        alert(data.message);
+        
+        if (resp.ok) {
+            window.location.href = '/view-my-channels';
+        }
+    } catch (err) {
+        console.error("Lỗi khi tạo nhóm:", err);
+        alert("Lỗi khi kết nối đến Tracker.");
+    }
+}
+
+// Logic Trưởng nhóm mời người khác vào nhóm
+async function handleAddMember() {
+    const groupName = prompt("Nhập tên nhóm bạn muốn thêm người:");
+    if (!groupName) return;
+
+    const targetUser = prompt("Nhập Username của người bạn muốn mời vào nhóm:");
+    if (!targetUser) return;
+
+    const currentUsername = getUsernameFromCookie();
+    const trackerIP = localStorage.getItem("trackerIP") || "127.0.0.1";
+    const trackerPort = localStorage.getItem("trackerPort") || "9000";
+
+    try {
+        const resp = await fetch(`http://${trackerIP}:${trackerPort}/add-to-group`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Truyền 3 món: Tên nhóm, Người bị add (target_user), Người đang ra lệnh add (username)
+            body: JSON.stringify({ 
+                group_name: groupName, 
+                target_user: targetUser,
+                username: currentUsername 
+            })
+        });
+        const data = await resp.json();
+        
+        if (resp.ok) {
+            alert("Thành công: " + data.message);
+        } else {
+            alert("Lỗi: " + data.message); // Sẽ báo lỗi nếu người bấm nút không phải Trưởng nhóm
+        }
+    } catch (err) {
+        console.error("Lỗi khi thêm thành viên:", err);
+        alert("Lỗi khi kết nối đến Tracker.");
+    }
+}
 
 // Lắp đặt móc nối Event Listener bảo đảm cây DOM định hình hoàn chỉnh trước khi đổ dữ liệu Web
 document.addEventListener("DOMContentLoaded", loadPeers);

@@ -57,7 +57,7 @@
         const logoutBtn = document.getElementById("btn-logout");
 
         if (logoutBtn) {
-          logoutBtn.addEventListener("click", function () {
+          logoutBtn.addEventListener("click", async function () {
             if (!confirm("Bạn có chắc chắn muốn rời khỏi mạng lưới P2P?")) {
               return;
             }
@@ -65,31 +65,32 @@
             logoutBtn.innerText = "⏳ Đang thoát...";
             logoutBtn.disabled = true;
 
-            // 1. Báo cáo cho Tracker (9000) trước!
-            // Phải có credentials: 'include' để mang theo Cookie tên MinhKhang báo cho máy chủ
-            fetch("http://127.0.0.1:9000/logout", {
-              method: "POST",
-              mode: "no-cors",
-              credentials: "include",
-            })
-              .then(() => {
-                // 2. Tracker gạch tên xong rồi, giờ trình duyệt mới tự sát Cookie
-                document.cookie =
-                  "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie =
-                  "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            try {
+                // 1. [MỚI THÊM] Thông báo cho máy chủ Peer của mình để gửi "tin báo tử" cho mạng
+                await fetch("/broadcast-logout", { method: "POST" });
+                console.log("Đã thông báo cho mạng P2P");
 
-                // 3. Đá văng về cổng của Lễ Tân Proxy (8888)
+                // 2. Báo cáo cho Tracker (sử dụng cổng động hoặc 9000 nếu chưa lưu)
+                const trackerIP = localStorage.getItem("trackerIP") || "127.0.0.1";
+                const trackerPort = localStorage.getItem("trackerPort") || "9000";
+
+                await fetch(`http://${trackerIP}:${trackerPort}/logout`, {
+                    method: "POST",
+                    mode: "no-cors",
+                    credentials: "include",
+                });
+                console.log("Đã thông báo cho Tracker");
+
+            } catch (error) {
+                console.error("Lỗi trong quá trình đăng xuất:", error);
+            } finally {
+                // 3. Luôn luôn hủy Cookie và điều hướng dù có lỗi hay không
+                document.cookie = "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                
+                // Đá văng về cổng của Lễ Tân Proxy (8888)
                 window.location.href = "http://127.0.0.1:8888/login";
-              })
-              .catch(() => {
-                // Lỗi thì cũng hủy Cookie cho an toàn
-                document.cookie =
-                  "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie =
-                  "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                window.location.href = "http://127.0.0.1:8888/login";
-              });
+            }
           });
         }
       });
@@ -110,6 +111,18 @@
           <th>Network IP</th>
           <th>Port Details</th>
           <th>Communication</th>
+        </tr>
+      </table>
+
+      <h3 style="margin-top: 2rem;">My Groups</h3>
+      <p style="color: var(--text-muted)">
+        The chat groups you are participating in.
+      </p>
+      <table id="groupsTable">
+        <tr>
+          <th>Group Name</th>
+          <th>Owner</th>
+          <th>Action</th>
         </tr>
       </table>
 
@@ -205,6 +218,91 @@
         }
       }
 
+      // --- Render danh sách Group ---
+      // --- Render danh sách Group ---
+      async function renderGroups() {
+        const trackerIP = localStorage.getItem("trackerIP") || "127.0.0.1";
+        const trackerPort = localStorage.getItem("trackerPort") || "9000"; 
+        const currentUsername = getUsername();
+
+        try {
+          const res = await fetch(`http://${trackerIP}:${trackerPort}/my-groups?username=${encodeURIComponent(currentUsername)}`);
+          const data = await res.json();
+          
+          const table = document.getElementById("groupsTable");
+          table.innerHTML = `<tr><th>Group Name</th><th>Owner</th><th>Action</th></tr>`;
+          
+          if (data.status === "success" && data.groups && data.groups.length > 0) {
+            data.groups.forEach(g => {
+              const row = table.insertRow();
+              row.insertCell().innerText = g.group_name;
+              
+              const isOwner = g.owner === currentUsername;
+              const ownerText = isOwner ? `👑 ${g.owner} (Bạn)` : `👤 ${g.owner}`;
+              row.insertCell().innerText = ownerText;
+              
+              // Cột Action chứa các nút bấm
+              const actionCell = row.insertCell();
+              
+              // Nút 1: Mở chat (Ai cũng có)
+              const chatBtn = document.createElement("button");
+              chatBtn.innerText = "Open Chat";
+              chatBtn.className = "btn"; // Thêm class cho đẹp
+              chatBtn.onclick = () => {
+                window.location.href = `/chat?group_name=${encodeURIComponent(g.group_name)}`;
+              };
+              actionCell.appendChild(chatBtn);
+
+              // Nút 2: Thêm người (CHỈ TRƯỞNG NHÓM MỚI CÓ)
+              if (isOwner) {
+                const addBtn = document.createElement("button");
+                addBtn.innerText = "➕ Add Member";
+                addBtn.className = "btn btn-secondary"; 
+                addBtn.style.marginLeft = "10px"; // Cách ra một chút cho đẹp
+                addBtn.onclick = () => inviteToGroup(g.group_name); // Gọi hàm mời
+                actionCell.appendChild(addBtn);
+              }
+            });
+          } else {
+            table.innerHTML += "<tr><td colspan='3' style='text-align:center;'>You haven't joined any groups yet!</td></tr>";
+          }
+        } catch (err) {
+          console.error("Lỗi tải danh sách nhóm:", err);
+        }
+      }
+
+      // --- Logic Trưởng nhóm nạp thêm người (Gọi từ bảng) ---
+      async function inviteToGroup(groupName) {
+          const targetUser = prompt(`Nhập Username của người bạn muốn mời vào nhóm '${groupName}':`);
+          if (!targetUser) return;
+
+          const currentUsername = getUsername();
+          const trackerIP = localStorage.getItem("trackerIP") || "127.0.0.1";
+          const trackerPort = localStorage.getItem("trackerPort") || "9000";
+
+          try {
+              const resp = await fetch(`http://${trackerIP}:${trackerPort}/add-to-group`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ 
+                      group_name: groupName, 
+                      target_user: targetUser,
+                      username: currentUsername 
+                  })
+              });
+              const data = await resp.json();
+              
+              if (resp.ok) {
+                  alert("Thành công: " + data.message);
+              } else {
+                  alert("Lỗi: " + data.message); 
+              }
+          } catch (err) {
+              console.error("Lỗi khi thêm thành viên:", err);
+              alert("Lỗi khi kết nối đến Tracker.");
+          }
+      }
+
       // --- Chuyển tới trang active peers ---
       function goActivePeers() {
         window.location.href = "/active-peers";
@@ -213,6 +311,7 @@
       document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("currentOwnerName").innerText = getUsername();
         renderChannels();
+        renderGroups();
       });
 
       // --- Popup broadcast ---
@@ -288,6 +387,14 @@
         broadcastInput.value = "";
         broadcastModal.style.display = "none";
       };
+
+      // --- Mở khung chat nhóm ---
+      function openGroupChat() {
+          const groupName = prompt("Nhập tên nhóm bạn muốn mở:");
+          if (groupName) {
+              window.location.href = `/chat?group_name=${encodeURIComponent(groupName)}`;
+          }
+      }
     </script>
   </body>
 </html>

@@ -354,7 +354,7 @@ def view_channels(req):
         return Response().build_internal_error({"message": str(e)})
 
 
-async def send_to_peer_async(ip, port, payload):
+async def send_to_peer_async(ip, port, payload, endpoint="/receive-message"):
     """
     Sử dụng asyncio để mở luồng mạng gửi tin nhắn trực tiếp đến Peer khác.
     Đây là mấu chốt để ăn trọn điểm "Non-blocking communication mechanism" cho P2P.
@@ -366,7 +366,7 @@ async def send_to_peer_async(ip, port, payload):
         # Đóng gói dữ liệu thành chuẩn HTTP/1.1
         body = json.dumps(payload)
         http_request = (
-            f"POST /receive-message HTTP/1.1\r\n"
+            f"POST {endpoint} HTTP/1.1\r\n"
             f"Host: {ip}:{port}\r\n"
             f"Content-Type: application/json\r\n"
             f"Content-Length: {len(body)}\r\n"
@@ -456,16 +456,9 @@ def send_message(req):
 #     )
 
 
-# Endpoint P2P cấu hình CORS để mở luồng tiếp nhận tin nhắn từ các Peer khác
 @app.route("/receive-message", methods=["POST", "OPTIONS"])
 def receive_message(req):
-    """
-    [Lắng nghe Tin nhắn P2P Tới] POST /receive-message
-    - Vai trò là Peer SERVER: Hàm này luôn mở port để hứng bất kỳ tin nhắn nào
-      từ các máy của người lạ bắn sang theo con đường Peer-to-Peer.
-    - Cứ nhận được tin nhắn là lại lưu vô `chat_messages` theo Username của chính kẻ gửi.
-    - Bật sẵn chế độ CORS (thích ứng mọi Port) để bảo đảm thông tin thông não mịn màng!
-    """
+    """[Lắng nghe P2P] Đã nâng cấp để nhận cả tin nhắn Nhóm."""
     try:
         cors_headers = (
             "Access-Control-Allow-Origin: *\r\n"
@@ -473,34 +466,73 @@ def receive_message(req):
             "Access-Control-Allow-Headers: Content-Type\r\n"
         )
         if req.method == "OPTIONS":
-            return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode(
-                "utf-8"
-            )
+            return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode("utf-8")
 
         data = json.loads(req.body)
         sender = data["sender"]
         message = data["message"]
         time_stamp = data["time_stamp"]
+        
+        # --- ĐOẠN MỚI: Kiểm tra xem có phải tin nhắn nhóm không ---
+        group_name = data.get("group_name") 
+        if group_name:
+            # Lưu vào hội thoại của nhóm
+            chat_messages.setdefault(group_name, []).append(
+                {"sender": sender, "message": message, "time_stamp": time_stamp}
+            )
+            print(f"[Peer]: Nhận tin từ {sender} trong nhóm {group_name}: [{message}]")
+        else:
+            # Lưu vào hội thoại cá nhân
+            chat_messages.setdefault(sender, []).append(
+                {"sender": sender, "message": message, "time_stamp": time_stamp}
+            )
+            print(f"[Peer]: Nhận tin 1-1 từ {sender}: [{message}]")
 
-        chat_messages.setdefault(sender, []).append(
-            {"sender": sender, "message": message, "time_stamp": time_stamp}
-        )
-        print(
-            f"[Peer]: Received message from {sender} at {time_stamp}. The content is [{message}]"
-        )
-
-        body = json.dumps({"status": "ok"})
-        content_length = len(body)
-        return (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            f"Content-Length: {content_length}\r\n"
-            f"{cors_headers}\r\n"
-            f"{body}"
-        ).encode("utf-8")
+        return ("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                f"{cors_headers}\r\n" + '{"status": "ok"}').encode("utf-8")
     except Exception as e:
         return Response().build_internal_error({"messages": str(e)})
+    
+@app.route("/send-group-message", methods=["POST"])
+def send_group_message(req):
+    """
+    [Phát sóng đa hướng] Gửi tin nhắn cho toàn bộ thành viên trong Group.
+    """
+    try:
+        data = json.loads(req.body)
+        group_name = data.get("group_name")
+        message = data.get("message")
+        time_stamp = data.get("time_stamp")
+        members = data.get("members", []) # Trình duyệt sẽ hỏi Tracker để lấy danh sách này truyền xuống
+        
+        sender_name = req.cookies.get("username", "Unknown")
+        
+        # 1. Lưu tin nhắn vào lịch sử (Box chat nhóm) của chính mình
+        chat_messages.setdefault(group_name, []).append(
+            {"sender": "Me", "message": message, "time_stamp": time_stamp}
+        )
+        print(f"[Peer]: Mình vừa gửi tin vào nhóm {group_name}")
 
+        # 2. Đóng gói hành trang (Có thêm nhãn group_name)
+        payload = {
+            "sender": sender_name,
+            "group_name": group_name,
+            "message": message,
+            "time_stamp": time_stamp
+        }
+        
+        # 3. Quét vòng lặp: Đâm socket bắn ngầm cho từng người (trừ bản thân mình)
+        for member in members:
+            if member["username"] != sender_name:
+                ip = member["ip"]
+                port = member["port"]
+                asyncio.run(send_to_peer_async(ip, port, payload))
+
+        return Response().build_success({"status": "ok", "message": f"Đã gửi đến {len(members)-1} người trong nhóm"})
+        
+    except Exception as e:
+        print(f"[P2P Group Error]: {e}")
+        return Response().build_internal_error({"message": str(e)})
 
 # Endpoint tra cứu và truy xuất mạch trò chuyện theo thời gian thực (hỗ trợ tác vụ Polling)
 @app.route("/get-messages", methods=["GET"])
@@ -536,13 +568,13 @@ from urllib.parse import urlparse, parse_qs
 def chat_page(req):
     """
     [Giao diện Chat Khủng] GET /chat
-    - Mở trang hiển thị nội dung cuộc đàm thoại (chat window) giữa 2 người dũng sĩ P2P.
-    - Đòi hỏi thông số URL phải có đủ: `?peer=...&ip=...&port=...` nếu không sẽ báo lỗi ngay lập tức.
-    - Yêu cầu đăng nhập (cookie auth=true).
+    - Mở trang hiển thị nội dung cuộc đàm thoại.
+    - [NÂNG CẤP]: Hỗ trợ cả Chat 1-1 (cần peer, ip, port) và Chat Nhóm (cần group_name).
     """
     unauthorized = require_auth(req)
     if unauthorized:
         return unauthorized
+        
     if not hasattr(req, "query_params") or req.query_params is None:
         req.query_params = {}
         parsed_url = urlparse(req.path)
@@ -551,13 +583,19 @@ def chat_page(req):
     peer = req.query_params.get("peer")
     ip = req.query_params.get("ip")
     port = req.query_params.get("port")
+    group_name = req.query_params.get("group_name") # Lấy thêm tham số group_name
 
-    if not all([peer, ip, port]):
+    # LẬP LUẬN LOGIC: Cho phép đi tiếp nếu có group_name HOẶC có đủ bộ 3 (peer, ip, port)
+    if not group_name and not all([peer, ip, port]):
         return Response().build_bad_request(
-            {"message": "Missing query param. Req: peer, ip, port"}
+            {"message": "Missing query param. Req: 'group_name' OR ('peer', 'ip', 'port')"}
         )
 
-    print(f"[Peer] Đang chat với {peer} tại {ip}:{port}")
+    # In log cho đẹp và dễ debug
+    if group_name:
+        print(f"[Peer] Đang mở giao diện chat nhóm: {group_name}")
+    else:
+        print(f"[Peer] Đang chat 1-1 với {peer} tại {ip}:{port}")
 
     try:
         req.path = "/chat.html"
@@ -567,13 +605,68 @@ def chat_page(req):
         print("Unexpected error:", e)
         return Response().build_internal_error({"message": str(e)})
 
-
 # Endpoint định tuyến bỏ qua dữ liệu mặc định hệ thống của trình duyệt Chrome DevTools
 @app.route("/.well-known/appspecific/com.chrome.devtools.json", methods=["GET"])
 def dummy_chrome_devtools(req):
     resp = Response()
     resp.headers.update({"Content-Type": "application/json"})
     return resp.build_success({})
+
+@app.route("/peer-disconnected", methods=["POST", "OPTIONS"])
+def peer_disconnected(req):
+    """
+    [Lắng nghe] Xóa Peer khỏi danh bạ cục bộ khi họ Logout
+    """
+    try:
+        cors_headers = (
+            "Access-Control-Allow-Origin: *\r\n"
+            "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+            "Access-Control-Allow-Headers: Content-Type\r\n"
+        )
+        if req.method == "OPTIONS":
+            return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode("utf-8")
+
+        data = json.loads(req.body)
+        leaved_peer = data.get("username")
+        
+        if leaved_peer:
+            # Xóa khỏi BiMap nội bộ
+            connected_peer.remove_by_key(leaved_peer)
+            print(f"[Peer] {leaved_peer} đã offline. Đã xóa khỏi danh bạ cục bộ.")
+            
+        return ("HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                f"{cors_headers}\r\n"
+                '{"status": "ok"}').encode("utf-8")
+    except Exception as e:
+        return Response().build_internal_error({"messages": str(e)})
+    
+@app.route("/broadcast-logout", methods=["POST"])
+def broadcast_logout(req):
+    """
+    Giao diện gọi hàm này khi user bấm Logout.
+    Hàm sẽ quét BiMap, gửi thông báo đến các peer khác, sau đó mới báo lên Tracker.
+    """
+    my_username = req.cookies.get("username", "")
+    all_friends = connected_peer.get_all() # Lấy danh sách bạn bè hiện tại
+    
+    payload = {"username": my_username}
+    
+    # Bắn tin báo tử cho từng người bạn
+    for friend_name, info in all_friends.items():
+        ip = info[0]
+        port = info[1]
+        try:
+            # Tận dụng lại hàm gửi mạng bất đồng bộ
+            asyncio.run(send_to_peer_async(ip, port, payload, endpoint="/peer-disconnected"))
+        except Exception as e:
+            print(f"Lỗi khi báo offline cho {friend_name}: {e}")
+            
+    # Xóa sạch danh bạ cục bộ của mình
+    connected_peer._key_to_value.clear()
+    connected_peer._value_to_key.clear()
+    
+    return Response().build_success({"status": "ok", "message": "Đã báo offline cho toàn mạng"})
 
 
 # --- Khối khởi chạy máy chủ ---
