@@ -252,8 +252,17 @@ def create_group(req):
                 f"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
             ).encode("utf-8")
 
-        # NÂNG CẤP: Lưu ai là chủ nhóm
-        group_list[group_name] = {"owner": username, "members": [username]}
+        initial_members = data.get("initial_members", [])
+        if not isinstance(initial_members, list):
+            initial_members = []
+            
+        members_list = [username]
+        for m in initial_members:
+            if m not in members_list:
+                members_list.append(m)
+
+        # NÂNG CẤP: Lưu ai là chủ nhóm và các thành viên khởi tạo
+        group_list[group_name] = {"owner": username, "members": members_list}
         print(f"[Tracker] {username} đã khởi tạo nhóm: {group_name}")
 
         body = json.dumps(
@@ -280,7 +289,11 @@ def add_to_group(req):
     try:
         data = json.loads(req.body)
         group_name = data.get("group_name")
-        target_user = data.get("target_user")  # Người bị lôi vào nhóm
+        target_users = data.get("target_users", []) # Hỗ trợ mảng nhiều user
+        target_user_single = data.get("target_user") # Tương thích ngược
+        if target_user_single and target_user_single not in target_users:
+            target_users.append(target_user_single)
+            
         requester = data.get("username") or (
             req.cookies.get("username") if req.cookies else None
         )  # Người bấm nút
@@ -303,14 +316,17 @@ def add_to_group(req):
                 f"HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
             ).encode("utf-8")
 
-        if target_user not in group_list[group_name]["members"]:
-            group_list[group_name]["members"].append(target_user)
-            print(f"[Tracker] {requester} đã add {target_user} vào nhóm {group_name}")
+        added_count = 0
+        for user in target_users:
+            if user not in group_list[group_name]["members"]:
+                group_list[group_name]["members"].append(user)
+                print(f"[Tracker] {requester} đã add {user} vào nhóm {group_name}")
+                added_count += 1
 
         body = json.dumps(
             {
                 "status": "success",
-                "message": f"Đã thêm {target_user} vào nhóm {group_name}",
+                "message": f"Đã thêm {added_count} thành viên vào nhóm {group_name}",
             }
         )
         return (

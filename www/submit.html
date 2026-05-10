@@ -7,37 +7,83 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <!-- Badge hiển thị Tên tài khoản đang đăng nhập -->
-    <div style="position: absolute; top: 1.5rem; left: 1.5rem; background: rgba(255, 255, 255, 0.9); padding: 0.5rem 1rem; border-radius: 99px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); font-weight: 600; font-size: 0.9rem; color: var(--text-main); border: 1px solid var(--card-border); backdrop-filter: blur(5px); z-index: 99;">
-      👤 Web User: <span id="currentOwnerName" style="color: var(--primary-color)">Khách</span>
+    <!-- ========================================== -->
+    <!-- BẮT ĐẦU: THANH ĐIỀU HƯỚNG (NAVBAR) CHUYÊN NGHIỆP -->
+    <!-- ========================================== -->
+    <nav style="position: fixed; top: 0; left: 0; width: 100%; padding: 1rem 2rem; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.05); z-index: 100; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; color: var(--primary-color); letter-spacing: -0.5px;">BKSysNet P2P</h2>
+            <div class="navbar-container" id="nav-user-badge">
+              <img id="nav-avatar" src="" style="width: 24px; height: 24px; border-radius: 50%; display: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" />
+              <span style="display: flex; align-items: center;">Me: <span id="currentOwnerName" style="color: var(--primary-color); margin-left: 4px;">Guest</span><span class="online-dot" title="Online"></span></span>
+            </div>
+        </div>
+        <button id="btn-logout" onmouseover="this.style.backgroundColor='#dc2626'; this.style.transform='translateY(-1px)'" onmouseout="this.style.backgroundColor='#ef4444'; this.style.transform='translateY(0)'" style="background-color: #ef4444; color: white; padding: 0.5rem 1.25rem; border: none; border-radius: 99px; cursor: pointer; font-weight: 600; font-size: 0.9rem; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2); transition: all 0.2s ease; display: flex; align-items: center; gap: 0.4rem;">
+            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            Sign Out
+        </button>
+    </nav>
+
+    <div class="container" style="margin-top: 6rem;">
+      <h2>Register Your Peer</h2>
+      <p style="color: var(--text-muted); margin-bottom: 2rem">
+        Configure your peer endpoint to join the network.
+      </p>
+
+      <form id="infoForm">
+        <div class="form-group">
+          <label for="ip">Host IP Address</label>
+          <input
+            type="text"
+            id="ip"
+            name="ip"
+            placeholder="e.g. 127.0.0.1"
+            value="127.0.0.1"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="port">Listening Port</label>
+          <input
+            type="number"
+            id="port"
+            name="port"
+            placeholder="e.g. 9001"
+            required
+          />
+        </div>
+        <button type="submit" class="btn" style="width: 100%">
+          Register Node
+        </button>
+        <div id="errorMsg"></div>
+      </form>
     </div>
 
-<div class="container">
-  <h2>Register Your Peer</h2>
-  <p style="color: var(--text-muted); margin-bottom: 2rem;">Configure your peer endpoint to join the network.</p>
+    <script>
+      const _match = document.cookie.match(/username=([^;]+)/);
+      const ownerNameElem = document.getElementById("currentOwnerName");
+      if (ownerNameElem && _match) {
+        const uname = _match[1];
+        ownerNameElem.innerText = uname;
+        const navAv = document.getElementById("nav-avatar");
+        if (navAv) {
+           navAv.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(uname)}&background=10b981&color=fff&rounded=true&bold=true`;
+           navAv.style.display = "inline-block";
+        }
+      }
 
-  <form id="submitForm">
-    <div class="form-group">
-      <label>Host IP Address</label>
-      <input name="ip" type="text" placeholder="e.g. 127.0.0.1" required>
-    </div>
-    
-    <div class="form-group">
-      <label>Listening Port</label>
-      <input name="port" type="text" placeholder="e.g. 9001" required>
-    </div>
-    
-    <button type="submit" class="btn" style="margin-top: 1rem;">Register Node</button>
-    <div id="errorMsg" class="error"></div>
-  </form>
-</div>
+      const logoutBtn = document.getElementById("btn-logout");
+      if (logoutBtn) {
+        logoutBtn.addEventListener("click", async () => {
+          try {
+            await fetch("/disconnect", { method: "POST" });
+          } catch (err) {}
+          document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          window.location.href = "/";
+        });
+      }
 
-<script>
-// Đọc và hiển thị tên đăng nhập lúc mới mở trang
-const _match = document.cookie.match(/username=([^;]+)/);
-document.getElementById('currentOwnerName').innerText = _match ? _match[1] : "Unknown";
-
-document.getElementById('submitForm').addEventListener('submit', async function(e){
+document.getElementById('infoForm').addEventListener('submit', async function(e){
     e.preventDefault();
 
     const ip = this.ip.value;

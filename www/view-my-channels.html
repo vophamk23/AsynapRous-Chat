@@ -7,50 +7,22 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <!-- Badge hiển thị Tên tài khoản đang đăng nhập -->
-    <div
-      style="
-        position: absolute;
-        top: 1.5rem;
-        left: 1.5rem;
-        background: rgba(255, 255, 255, 0.9);
-        padding: 0.5rem 1rem;
-        border-radius: 99px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: var(--text-main);
-        border: 1px solid var(--card-border);
-        backdrop-filter: blur(5px);
-        z-index: 99;
-      "
-    >
-      👤 Web User:
-      <span id="currentOwnerName" style="color: var(--primary-color)"
-        >Khách</span
-      >
-    </div>
     <!-- ========================================== -->
-    <!-- BẮT ĐẦU: KHỐI NÚT ĐĂNG XUẤT VÀ SCRIPT XỬ LÝ -->
+    <!-- BẮT ĐẦU: THANH ĐIỀU HƯỚNG (NAVBAR) CHUYÊN NGHIỆP -->
     <!-- ========================================== -->
-    <div style="position: absolute; top: 1.5rem; right: 1.5rem; z-index: 99">
-      <button
-        id="btn-logout"
-        style="
-          background-color: #ef4444;
-          color: white;
-          padding: 0.5rem 1rem;
-          border: none;
-          border-radius: 99px;
-          cursor: pointer;
-          font-weight: 600;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          transition: all 0.2s;
-        "
-      >
-        🚪 Đăng xuất
-      </button>
-    </div>
+    <nav style="position: fixed; top: 0; left: 0; width: 100%; padding: 1rem 2rem; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.05); z-index: 100; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; color: var(--primary-color); letter-spacing: -0.5px;">BKSysNet P2P</h2>
+            <div class="navbar-container" id="nav-user-badge">
+              <img id="nav-avatar" src="" style="width: 24px; height: 24px; border-radius: 50%; display: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" />
+              <span style="display: flex; align-items: center;">Me: <span id="currentOwnerName" style="color: var(--primary-color); margin-left: 4px;">Guest</span><span class="online-dot" title="Online"></span></span>
+            </div>
+        </div>
+        <button id="btn-logout" onmouseover="this.style.backgroundColor='#dc2626'; this.style.transform='translateY(-1px)'" onmouseout="this.style.backgroundColor='#ef4444'; this.style.transform='translateY(0)'" style="background-color: #ef4444; color: white; padding: 0.5rem 1.25rem; border: none; border-radius: 99px; cursor: pointer; font-weight: 600; font-size: 0.9rem; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2); transition: all 0.2s ease; display: flex; align-items: center; gap: 0.4rem;">
+            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            Sign Out
+        </button>
+    </nav>
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
@@ -106,7 +78,7 @@
     <!-- KẾT THÚC: KHỐI NÚT ĐĂNG XUẤT               -->
     <!-- ========================================== -->
 
-    <div class="container wide">
+    <div class="container wide" style="margin-top: 6rem; width: fit-content; min-width: 600px;">
       <h2>My Connected Channels</h2>
       <p style="color: var(--text-muted)">
         Manage your active peer-to-peer connections.
@@ -141,6 +113,7 @@
         >
           Browse Active Peers
         </button>
+        <button class="btn" onclick="openCreateGroupModal()">Create Group</button>
         <button id="broadcast-btn" class="btn">Broadcast to All</button>
       </div>
     </div>
@@ -167,6 +140,31 @@
             Cancel
           </button>
           <button id="send-broadcast-btn" class="btn">Broadcast Now</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popup modal đa năng cho Create Group & Add Member -->
+    <div id="multi-select-modal" class="modal-overlay" style="display:none; justify-content: center; align-items: center; z-index: 9999;">
+      <div class="modal-content" style="padding: 2.5rem; text-align: left;">
+        <h3 id="ms-modal-title" style="margin-bottom: 1.5rem; text-align: center; color: var(--text-main);">Title</h3>
+        
+        <div style="margin-bottom: 1rem;">
+            <input type="text" id="ms-group-name" placeholder="Enter group name..." style="margin-bottom: 0;" />
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <input type="text" id="ms-search-peer" placeholder="🔍 Search members..." onkeyup="filterPeers()" style="margin-bottom: 0;" />
+        </div>
+        
+        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem; font-weight: bold;">SELECT MEMBERS:</label>
+        <div id="ms-peer-list" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--card-border); padding: 0.75rem; margin-bottom: 1.5rem; border-radius: 8px; background: rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 0.5rem;">
+           <!-- Checkboxes rendered here -->
+        </div>
+
+        <div class="modal-actions" style="justify-content: center; gap: 1rem;">
+          <button class="btn btn-secondary" onclick="closeMultiSelectModal()" style="width: 100%;">Cancel</button>
+          <button id="ms-submit-btn" class="btn" style="width: 100%;">Confirm</button>
         </div>
       </div>
     </div>
@@ -293,46 +291,196 @@
         }
       }
 
-      // --- Logic Trưởng nhóm nạp thêm người (Gọi từ bảng) ---
-      async function inviteToGroup(groupName) {
-        const targetUser = prompt(
-          `Nhập Username của người bạn muốn mời vào nhóm '${groupName}':`,
-        );
-        if (!targetUser) return;
+      // --- Logic MỚI: Multi-select Modal cho Create/Add Group ---
+      let msMode = "create"; // "create" or "add"
+      let msTargetGroup = "";
 
-        const currentUsername = getUsername();
-        let trackerIP = "127.0.0.1";
-        let trackerPort = "9000";
+      function closeMultiSelectModal() {
+        document.getElementById("multi-select-modal").style.display = "none";
+        document.getElementById("multi-select-modal").style.setProperty("display", "none", "important");
+      }
+
+      function filterPeers() {
+        const filter = document.getElementById("ms-search-peer").value.toLowerCase();
+        const labels = document.querySelectorAll("#ms-peer-list label");
+        labels.forEach(label => {
+          const text = label.innerText.toLowerCase();
+          label.style.display = text.includes(filter) ? "block" : "none";
+        });
+      }
+
+      async function fetchAllPeers() {
+        let trackerIP = "127.0.0.1"; let trackerPort = "9000";
         try {
           const trRes = await fetch("/get-tracker");
           const trData = await trRes.json();
           if (trData.trackerIP) trackerIP = trData.trackerIP;
           if (trData.trackerPort) trackerPort = trData.trackerPort;
-        } catch (err) { console.warn("Lỗi lấy tracker:", err); }
+        } catch (err) {}
+        try {
+          const resp = await fetch(`http://${trackerIP}:${trackerPort}/get-list`);
+          const data = await resp.json();
+          return data.peers || {};
+        } catch(err) { return {}; }
+      }
+
+      async function populatePeerList(existingMembers = []) {
+        // [Cập nhật] Chỉ lấy những người đã Connect thành công thay vì lấy toàn bộ mạng
+        const peers = await getConnectedPeers();
+        const currentUsername = getUsername();
+        const listDiv = document.getElementById("ms-peer-list");
+        listDiv.innerHTML = "";
+        
+        Object.keys(peers).forEach(p => {
+          if (p === currentUsername) return; // Bỏ qua chính mình
+          if (existingMembers.includes(p)) return; // Bỏ qua người đã ở trong nhóm (khi add)
+          
+          const lbl = document.createElement("label");
+          lbl.style.display = "flex";
+          lbl.style.alignItems = "center";
+          lbl.style.padding = "0.75rem 1rem";
+          lbl.style.margin = "0";
+          lbl.style.cursor = "pointer";
+          lbl.style.background = "transparent";
+          lbl.style.border = "1px solid var(--card-border)";
+          lbl.style.borderRadius = "8px";
+          lbl.style.transition = "all 0.2s ease";
+          lbl.style.color = "var(--text-main)";
+          lbl.style.fontWeight = "500";
+          
+          lbl.onmouseover = () => { lbl.style.borderColor = "var(--primary-color)"; lbl.style.background = "rgba(79,70,229,0.05)"; }
+          lbl.onmouseout = () => { lbl.style.borderColor = "var(--card-border)"; lbl.style.background = "transparent"; }
+          
+          const chk = document.createElement("input");
+          chk.type = "checkbox";
+          chk.value = p;
+          chk.className = "peer-checkbox";
+          chk.style.margin = "0 12px 0 0";
+          chk.style.transform = "scale(1.2)";
+          chk.style.cursor = "pointer";
+          
+          lbl.appendChild(chk);
+          lbl.appendChild(document.createTextNode(p));
+          listDiv.appendChild(lbl);
+        });
+        if (listDiv.innerHTML === "") {
+          listDiv.innerHTML = "<p style='color:gray; font-size:0.9em; text-align:center;'>No other peers are online.</p>";
+        }
+      }
+
+      async function openCreateGroupModal() {
+        msMode = "create";
+        document.getElementById("ms-modal-title").innerText = "Create New Group";
+        const groupInput = document.getElementById("ms-group-name");
+        groupInput.style.display = "block";
+        groupInput.value = "";
+        groupInput.readOnly = false;
+        document.getElementById("ms-search-peer").value = "";
+        
+        await populatePeerList();
+        
+        document.getElementById("ms-submit-btn").onclick = submitMultiSelect;
+        document.getElementById("multi-select-modal").style.display = "flex";
+      }
+
+      async function inviteToGroup(groupName) {
+        msMode = "add";
+        msTargetGroup = groupName;
+        document.getElementById("ms-modal-title").innerText = `Add member to '${groupName}'`;
+        const groupInput = document.getElementById("ms-group-name");
+        groupInput.style.display = "block";
+        groupInput.value = groupName;
+        groupInput.readOnly = true;
+        document.getElementById("ms-search-peer").value = "";
+        
+        // Lấy danh sách thành viên hiện tại để loại trừ
+        let existingMembers = [];
+        let trackerIP = "127.0.0.1"; let trackerPort = "9000";
+        try {
+          const trRes = await fetch("/get-tracker");
+          const trData = await trRes.json();
+          if (trData.trackerIP) trackerIP = trData.trackerIP;
+          if (trData.trackerPort) trackerPort = trData.trackerPort;
+          
+          const memRes = await fetch(`http://${trackerIP}:${trackerPort}/get-group-members?group_name=${encodeURIComponent(groupName)}`);
+          const memData = await memRes.json();
+          if (memData.members) {
+             existingMembers = memData.members.map(m => m.username || m);
+          }
+        } catch(e) {
+          console.warn("Could not fetch existing members", e);
+        }
+        
+        await populatePeerList(existingMembers);
+        
+        document.getElementById("ms-submit-btn").onclick = submitMultiSelect;
+        document.getElementById("multi-select-modal").style.display = "flex";
+      }
+
+      async function submitMultiSelect() {
+        const groupName = document.getElementById("ms-group-name").value.trim();
+        if (!groupName) return alert("Please enter a group name!");
+        
+        const checkedBoxes = document.querySelectorAll(".peer-checkbox:checked");
+        const selectedUsers = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        const currentUsername = getUsername();
+        let trackerIP = "127.0.0.1"; let trackerPort = "9000";
+        try {
+          const trRes = await fetch("/get-tracker");
+          const trData = await trRes.json();
+          if (trData.trackerIP) trackerIP = trData.trackerIP;
+          if (trData.trackerPort) trackerPort = trData.trackerPort;
+        } catch (err) {}
+
+        const btn = document.getElementById("ms-submit-btn");
+        btn.innerText = "Processing...";
+        btn.disabled = true;
 
         try {
-          const resp = await fetch(
-            `http://${trackerIP}:${trackerPort}/add-to-group`,
-            {
+          if (msMode === "create") {
+            // 1. Tạo nhóm với initial_members
+            const resp = await fetch(`http://${trackerIP}:${trackerPort}/create-group`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 group_name: groupName,
-                target_user: targetUser,
                 username: currentUsername,
+                initial_members: selectedUsers
               }),
-            },
-          );
-          const data = await resp.json();
-
-          if (resp.ok) {
-            alert("Thành công: " + data.message);
+            });
+            const data = await resp.json();
+            alert(data.message);
+            if(resp.ok) {
+                closeMultiSelectModal();
+                renderGroups(); // Tải lại bảng
+            }
           } else {
-            alert("Lỗi: " + data.message);
+            // 2. Add member với target_users
+            if (selectedUsers.length === 0) {
+                alert("Vui lòng tích chọn ít nhất 1 người!");
+                btn.innerText = "Xác nhận"; btn.disabled = false;
+                return;
+            }
+            const resp = await fetch(`http://${trackerIP}:${trackerPort}/add-to-group`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                group_name: groupName,
+                target_users: selectedUsers,
+                username: currentUsername
+              }),
+            });
+            const data = await resp.json();
+            alert(data.message);
+            if(resp.ok) closeMultiSelectModal();
           }
         } catch (err) {
-          console.error("Lỗi khi thêm thành viên:", err);
-          alert("Lỗi khi kết nối đến Tracker.");
+          console.error(err);
+          alert("Lỗi kết nối tới Tracker!");
+        } finally {
+          btn.innerText = "Xác nhận";
+          btn.disabled = false;
         }
       }
 
@@ -359,8 +507,19 @@
 
       // --- Lấy username từ cookie ---
       function getUsername() {
-        const match = document.cookie.match(/username=([^;]+)/);
-        return match ? match[1] : "Unknown";
+        const _match = document.cookie.match(/username=([^;]+)/);
+        const ownerNameElem = document.getElementById("currentOwnerName");
+        if (ownerNameElem && _match) {
+          const uname = _match[1];
+          ownerNameElem.innerText = uname;
+          const navAv = document.getElementById("nav-avatar");
+          if (navAv) {
+             navAv.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(uname)}&background=10b981&color=fff&rounded=true&bold=true`;
+             navAv.style.display = "inline-block";
+          }
+          return uname;
+        }
+        return "Unknown";
       }
 
       // --- Lưu message vào server local ---
