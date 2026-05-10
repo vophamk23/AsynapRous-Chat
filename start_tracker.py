@@ -218,6 +218,175 @@ def submit_info(req):
         return Response().build_internal_error({"status": "error", "message": str(e)})
 
 
+# Cấu trúc: {"Tên Nhóm": {"owner": "Trưởng nhóm", "members": ["Thành viên 1", "Thành viên 2"]}}
+group_list = {}
+
+
+@app.route("/create-group", methods=["POST", "OPTIONS"])
+def create_group(req):
+    """[API Group] Tạo nhóm và ĐÁNH DẤU CHỦ SỞ HỮU."""
+    cors_headers = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n"
+    if req.method == "OPTIONS":
+        return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode("utf-8")
+
+    try:
+        data = json.loads(req.body)
+        group_name = data.get("group_name")
+        username = data.get("username") or (
+            req.cookies.get("username") if req.cookies else None
+        )
+
+        if not group_name or not username:
+            body = json.dumps(
+                {"status": "error", "message": "Thiếu tên nhóm hoặc chưa đăng nhập"}
+            )
+            return (
+                f"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+            ).encode("utf-8")
+
+        if group_name in group_list:
+            body = json.dumps(
+                {"status": "error", "message": f"Nhóm '{group_name}' đã tồn tại!"}
+            )
+            return (
+                f"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+            ).encode("utf-8")
+
+        # NÂNG CẤP: Lưu ai là chủ nhóm
+        group_list[group_name] = {"owner": username, "members": [username]}
+        print(f"[Tracker] {username} đã khởi tạo nhóm: {group_name}")
+
+        body = json.dumps(
+            {
+                "status": "success",
+                "message": "Tạo nhóm thành công",
+                "group_name": group_name,
+            }
+        )
+        return (
+            f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+        ).encode("utf-8")
+    except Exception as e:
+        return Response().build_internal_error({"message": str(e)})
+
+
+@app.route("/add-to-group", methods=["POST", "OPTIONS"])
+def add_to_group(req):
+    """[API Group MỚI] Chủ nhóm gọi hàm này để nạp thêm thành viên."""
+    cors_headers = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n"
+    if req.method == "OPTIONS":
+        return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode("utf-8")
+
+    try:
+        data = json.loads(req.body)
+        group_name = data.get("group_name")
+        target_user = data.get("target_user")  # Người bị lôi vào nhóm
+        requester = data.get("username") or (
+            req.cookies.get("username") if req.cookies else None
+        )  # Người bấm nút
+
+        if group_name not in group_list:
+            body = json.dumps({"status": "error", "message": "Nhóm không tồn tại"})
+            return (
+                f"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+            ).encode("utf-8")
+
+        # KIỂM TRA QUYỀN: Chỉ Owner mới được quyền add (Thích thì bạn có thể mở rộng cho mọi member)
+        if group_list[group_name]["owner"] != requester:
+            body = json.dumps(
+                {
+                    "status": "error",
+                    "message": "Chỉ Trưởng nhóm mới có quyền thêm người!",
+                }
+            )
+            return (
+                f"HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+            ).encode("utf-8")
+
+        if target_user not in group_list[group_name]["members"]:
+            group_list[group_name]["members"].append(target_user)
+            print(f"[Tracker] {requester} đã add {target_user} vào nhóm {group_name}")
+
+        body = json.dumps(
+            {
+                "status": "success",
+                "message": f"Đã thêm {target_user} vào nhóm {group_name}",
+            }
+        )
+        return (
+            f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+        ).encode("utf-8")
+    except Exception as e:
+        return Response().build_internal_error({"message": str(e)})
+
+
+@app.route("/get-group-members", methods=["GET", "OPTIONS"])
+def get_group_members(req):
+    """[API Group] Lấy IP/Port của các thành viên."""
+    cors_headers = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n"
+    if req.method == "OPTIONS":
+        return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode("utf-8")
+
+    try:
+        group_name = req.query_params.get("group_name")
+        if group_name not in group_list:
+            body = json.dumps({"status": "error", "message": "Nhóm không tồn tại"})
+            return (
+                f"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+            ).encode("utf-8")
+
+        members_info = []
+        # Sửa lại cách lặp lấy danh sách thành viên
+        for member in group_list[group_name]["members"]:
+            if member in peer_list:
+                members_info.append(
+                    {
+                        "username": member,
+                        "ip": peer_list[member]["ip"],
+                        "port": peer_list[member]["port"],
+                    }
+                )
+
+        body = json.dumps({"status": "success", "members": members_info})
+        return (
+            f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+        ).encode("utf-8")
+    except Exception as e:
+        return Response().build_internal_error({"message": str(e)})
+
+
+@app.route("/my-groups", methods=["GET", "OPTIONS"])
+def my_groups(req):
+    """[API Group] Lấy danh sách các nhóm mà user hiện tại đang tham gia."""
+    cors_headers = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n"
+    if req.method == "OPTIONS":
+        return ("HTTP/1.1 204 No Content\r\n" + f"{cors_headers}\r\n").encode("utf-8")
+
+    try:
+        username = req.query_params.get("username") or (
+            req.cookies.get("username") if req.cookies else None
+        )
+        if not username:
+            body = json.dumps({"status": "error", "message": "Chưa đăng nhập"})
+            return (
+                f"HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+            ).encode("utf-8")
+
+        my_group_list = []
+        # Quét toàn bộ danh sách nhóm trên RAM
+        for g_name, g_info in group_list.items():
+            # Nếu tên mình có trong danh sách members của nhóm đó
+            if username in g_info["members"]:
+                my_group_list.append({"group_name": g_name, "owner": g_info["owner"]})
+
+        body = json.dumps({"status": "success", "groups": my_group_list})
+        return (
+            f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{cors_headers}Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+        ).encode("utf-8")
+    except Exception as e:
+        return Response().build_internal_error({"message": str(e)})
+
+
 @app.route("/logout", methods=["POST"])
 def logout(req):
     """
@@ -354,10 +523,6 @@ if __name__ == "__main__":
         type=str,
         choices=["threading", "callback", "coroutine"],
         default="threading",
-        # Chọn cơ chế xử lý đồng thời:
-        #   threading  – Mỗi client 1 luồng riêng (mặc định, dễ dùng)
-        #   callback   – Hướng sự kiện dùng Selector, tiết kiệm RAM
-        #   coroutine  – Async/Await hiện đại, hiệu năng cao nhất
         help="Chế độ non-blocking. Mặc định: threading",
     )
 
@@ -365,11 +530,13 @@ if __name__ == "__main__":
     ip = args.server_ip
     port = args.server_port
 
-    # Ghi đè chế độ non-blocking vào backend trước khi server khởi động
+    # Ghi đè chế độ vào backend
     import daemon.backend as backend
 
     backend.mode_async = args.mode
 
-    print(f"[ChatServer] Đang khởi chạy máy chủ tracker tại http://{ip}:{port}")
+    print(
+        f"[ChatServer] Đang khởi chạy máy chủ tracker ({args.mode}) tại http://{ip}:{port}"
+    )
     app.prepare_address(ip, port)
     app.run()

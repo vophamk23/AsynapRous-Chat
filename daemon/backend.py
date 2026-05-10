@@ -22,6 +22,7 @@ Nó triển khai một máy chủ TCP đa năng sử dụng thư viện `socket`
 Nhiệm vụ chính: Mở cổng mạng -> Đón Client -> Giao nhiệm vụ xử lý cho `HttpAdapter`.
 """
 
+from http import server
 import socket
 import threading
 import argparse
@@ -133,7 +134,8 @@ def run_backend(ip, port, routes):
 
     try:
         server.bind((ip, port))
-        server.listen(50) # Hàng đợi xếp hàng tối đa 50 khách
+        # Tăng hàng đợi (backlog) lên mức tối đa để đón 1000 khách ập vào cùng lúc
+        server.listen(socket.SOMAXCONN if hasattr(socket, 'SOMAXCONN') else 2000)
         print("[Backend] Cổng {} đã sẵn sàng...".format(port))
 
         if routes != {}:
@@ -144,34 +146,49 @@ def run_backend(ip, port, routes):
 
         # Nếu dùng Callback, đăng ký máy chủ vào Tổng đài sự kiện (Selector)
         if mode_async == "callback":
-            server.setblocking(False) # PHẢI cởi trói cho server NGAY TỪ ĐẦU
-            sel.register(server, selectors.EVENT_READ, (handle_client_callback, ip, port, routes))
-            
-        # VÒNG LẶP VÔ TẬN: Liên tục hứng các yêu cầu kết nối bay tới
+            server.setblocking(False)  # Selector yêu cầu socket phải non-blocking
+            sel.register(server, selectors.EVENT_READ, (ip, port, routes))
+            # Chỉ register MỘT LẦN ngoài vòng lặp — register 2 lần = FileExistsError
+
         while True:
-            
-
-            # --- ĐÃ GIẢI QUYẾT TODO: Triển khai kiến trúc Non-blocking ---
             if mode_async == "callback":
-               # Quét bộ chọn (Selector) xem có sự kiện mạng nào mới không
-               events = sel.select(timeout=None)
-               for key, mask in events:
-                   server_socket = key.fileobj
-                   conn, addr = server_socket.accept()
-                   callback, ip, port, routes = key.data
-                   # Gọi hàm callback tương ứng
-                   callback(server_socket, ip, port, conn, addr, routes)
-
+                # timeout=1: không block mãi mãi nếu không có client
+                events = sel.select(timeout=1)
+                
+                for key, mask in events:
+                    if key.fileobj is server:
+                        try:
+                            conn, addr = server.accept()
+                            
+                            # Socket con cần blocking — HttpAdapter không hỗ trợ non-blocking
+                            conn.setblocking(True)
+                            
+                            # Đẩy vào thread riêng để vòng lặp không bị treo
+                            # daemon=True: thread tự tắt khi server tắt
+                            t = threading.Thread(
+                                target=handle_client_callback,
+                                args=(server, ip, port, conn, addr, routes),
+                                daemon=True
+                            )
+                            t.start()
+                            
+                        except Exception as e:
+                            print(f"[Backend] Callback accept lỗi: {e}")
             else:
-                # Lệnh chặn (Block): Đứng yên cho đến khi có khách gõ cửa
-                conn, addr = server.accept()
-                # Mô hình Threading (Mặc định): Cấp 1 luồng riêng để phục vụ
-                # Giống như thuê riêng 1 phục vụ cho 1 bàn khách, máy chủ rảnh tay đi đón khách mới
-                client_thread = threading.Thread(target=handle_client, args=(ip, port, conn, addr, routes))
-                client_thread.start()
+                # Threading: block chờ client, mỗi client 1 thread riêng
+                try:
+                    conn, addr = server.accept()
+                    client_thread = threading.Thread(
+                        target=handle_client,
+                        args=(ip, port, conn, addr, routes),
+                        daemon=True
+                    )
+                    client_thread.start()
+                except Exception as e:
+                    print(f"[Backend] Threading accept lỗi: {e}")
 
     except socket.error as e:
-      print("[Backend] LỖI MẠNG LÕI: {}".format(e))
+        print("[Backend] LỖI MẠNG LÕI: {}".format(e))
 
 def create_backend(ip, port, routes={}):
     """Điểm kích nổ (Entry point) để chạy máy chủ."""

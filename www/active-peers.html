@@ -58,7 +58,7 @@
         const logoutBtn = document.getElementById("btn-logout");
 
         if (logoutBtn) {
-          logoutBtn.addEventListener("click", function () {
+          logoutBtn.addEventListener("click", async function () {
             if (!confirm("Bạn có chắc chắn muốn rời khỏi mạng lưới P2P?")) {
               return;
             }
@@ -66,31 +66,39 @@
             logoutBtn.innerText = "⏳ Đang thoát...";
             logoutBtn.disabled = true;
 
-            // 1. Báo cáo cho Tracker (9000) trước!
-            // Phải có credentials: 'include' để mang theo Cookie tên MinhKhang báo cho máy chủ
-            fetch("http://127.0.0.1:9000/logout", {
-              method: "POST",
-              mode: "no-cors",
-              credentials: "include",
-            })
-              .then(() => {
-                // 2. Tracker gạch tên xong rồi, giờ trình duyệt mới tự sát Cookie
-                document.cookie =
-                  "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie =
-                  "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            try {
+              // 1. [MỚI THÊM] Thông báo cho máy chủ Peer của mình để gửi "tin báo tử" cho mạng
+              await fetch("/broadcast-logout", { method: "POST" });
+              console.log("Đã thông báo cho mạng P2P");
 
-                // 3. Đá văng về cổng của Lễ Tân Proxy (8888)
-                window.location.href = "http://127.0.0.1:8888/login";
-              })
-              .catch(() => {
-                // Lỗi thì cũng hủy Cookie cho an toàn
-                document.cookie =
-                  "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie =
-                  "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                window.location.href = "http://127.0.0.1:8888/login";
+              // 2. Báo cáo cho Tracker (sử dụng cổng động hoặc 9000 nếu chưa lưu)
+              let trackerIP = "127.0.0.1";
+              let trackerPort = "9000";
+              try {
+                const trRes = await fetch("/get-tracker");
+                const trData = await trRes.json();
+                if (trData.trackerIP) trackerIP = trData.trackerIP;
+                if (trData.trackerPort) trackerPort = trData.trackerPort;
+              } catch (err) { console.warn("Lỗi lấy tracker:", err); }
+
+              await fetch(`http://${trackerIP}:${trackerPort}/logout`, {
+                method: "POST",
+                mode: "no-cors",
+                credentials: "include",
               });
+              console.log("Đã thông báo cho Tracker");
+            } catch (error) {
+              console.error("Lỗi trong quá trình đăng xuất:", error);
+            } finally {
+              // 3. Luôn luôn hủy Cookie và điều hướng dù có lỗi hay không
+              document.cookie =
+                "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+              document.cookie =
+                "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+              // Đá văng về cổng của Lễ Tân Proxy (8888)
+              window.location.href = "http://127.0.0.1:8888/login";
+            }
           });
         }
       });
@@ -104,7 +112,9 @@
       <p style="color: var(--text-muted)">
         List of peers registered in the tracker.
       </p>
-
+      <div class="actions" style="margin-bottom: 1rem">
+        <button class="btn" onclick="handleCreateGroup()">Create Group</button>
+      </div>
       <table id="peerTable">
         <tr>
           <th>Username</th>
