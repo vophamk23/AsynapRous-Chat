@@ -40,11 +40,38 @@ if (groupName) {
          
          try {
            const trackerResp = await fetch(`http://${trackerIP}:${trackerPort}/get-group-members?group_name=${encodeURIComponent(groupName)}`);
+           
+           if (!trackerResp.ok) throw new Error("Failed");
            const trackerData = await trackerResp.json();
-           if (trackerResp.ok) {
+           
+           let membersList = trackerData.members;
+           localStorage.setItem(`group_members_${groupName}`, JSON.stringify(membersList));
+           
+           const listElem = document.getElementById("members-list");
+           listElem.innerHTML = "";
+           membersList.forEach(memberObj => {
+               const memberName = memberObj.username || memberObj;
+               const memAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(memberName)}&background=random&color=fff&rounded=true&bold=true`;
+               const li = document.createElement("li");
+               li.style.padding = "0.75rem 1rem";
+               li.style.borderBottom = "1px solid var(--card-border)";
+               li.style.color = "var(--text-main)";
+               li.style.display = "flex";
+               li.style.alignItems = "center";
+               li.style.gap = "0.75rem";
+               li.innerHTML = `<img src="${memAvatar}" style="width: 32px; height: 32px; border-radius: 50%;" /> <span><strong>${memberName}</strong> ${memberName === username ? '<span style="color:var(--text-muted);font-size:0.8rem;">(You)</span>' : ''}</span>`;
+               listElem.appendChild(li);
+           });
+           document.getElementById("members-modal-title").innerText = `Group members of '${groupName}'`;
+           document.getElementById("members-modal").style.display = "flex";
+         } catch(e) {
+            console.warn("Lỗi gọi Tracker xem mem, thử dùng cache...", e);
+            const cachedStr = localStorage.getItem(`group_members_${groupName}`);
+            if (cachedStr) {
+               let membersList = JSON.parse(cachedStr);
                const listElem = document.getElementById("members-list");
                listElem.innerHTML = "";
-               trackerData.members.forEach(memberObj => {
+               membersList.forEach(memberObj => {
                    const memberName = memberObj.username || memberObj;
                    const memAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(memberName)}&background=random&color=fff&rounded=true&bold=true`;
                    const li = document.createElement("li");
@@ -57,13 +84,11 @@ if (groupName) {
                    li.innerHTML = `<img src="${memAvatar}" style="width: 32px; height: 32px; border-radius: 50%;" /> <span><strong>${memberName}</strong> ${memberName === username ? '<span style="color:var(--text-muted);font-size:0.8rem;">(You)</span>' : ''}</span>`;
                    listElem.appendChild(li);
                });
-               document.getElementById("members-modal-title").innerText = `Group members of '${groupName}'`;
+               document.getElementById("members-modal-title").innerText = `Group members of '${groupName}' (Cached)`;
                document.getElementById("members-modal").style.display = "flex";
-           } else {
-               alert("Failed to load member list.");
-           }
-         } catch(e) {
-            alert("Connection error: Could not reach Tracker.");
+            } else {
+               alert("Connection error: Could not reach Tracker and no cache available.");
+            }
          } finally {
             btnMembers.innerText = btnOriginText;
             btnMembers.disabled = false;
@@ -137,23 +162,34 @@ async function handleSendMessage(text) {
       if (trData.trackerPort) trackerPort = trData.trackerPort;
     } catch (err) { console.warn("Lỗi lấy tracker:", err); }
 
+    let membersList = [];
     try {
       // 1. Hỏi Tracker lấy danh sách thành viên hiện tại của nhóm
       const trackerResp = await fetch(
         `http://${trackerIP}:${trackerPort}/get-group-members?group_name=${encodeURIComponent(groupName)}`,
       );
-      const trackerData = await trackerResp.json();
 
       if (!trackerResp.ok) {
+        throw new Error("Failed to retrieve group information.");
+      }
+      const trackerData = await trackerResp.json();
+      membersList = trackerData.members;
+      localStorage.setItem(`group_members_${groupName}`, JSON.stringify(membersList));
+    } catch (err) {
+      console.warn("Lỗi kết nối Tracker. Dùng cache...", err);
+      const cachedStr = localStorage.getItem(`group_members_${groupName}`);
+      if (cachedStr) {
+        membersList = JSON.parse(cachedStr);
+      } else {
         appendMessage(
           "System",
-          trackerData.message || "Failed to retrieve group information.",
+          "Failed to retrieve group information and no cache available."
         );
         return;
       }
+    }
 
-      const membersList = trackerData.members;
-
+    try {
       // 2. Gửi lệnh yêu cầu Peer Server của mình phát sóng tin nhắn
       await fetch("/send-group-message", {
         method: "POST",
@@ -275,9 +311,16 @@ async function fetchSidebarData() {
       if (trData.trackerPort) trackerPort = trData.trackerPort;
     } catch(e){}
     const res2 = await fetch(`http://${trackerIP}:${trackerPort}/my-groups?username=${encodeURIComponent(username)}`);
+    if (!res2.ok) throw new Error("Tracker failed");
     const gData = await res2.json();
-    if(gData.groups) groups = gData.groups;
-  } catch(e) {}
+    if(gData.groups) {
+       groups = gData.groups;
+       localStorage.setItem(`my_groups_${username}`, JSON.stringify(groups));
+    }
+  } catch(e) {
+      const cached = localStorage.getItem(`my_groups_${username}`);
+      if (cached) groups = JSON.parse(cached);
+  }
 
   let chatItems = []; 
 

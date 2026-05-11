@@ -224,7 +224,6 @@
       }
 
       // --- Render danh sách Group ---
-      // --- Render danh sách Group ---
       async function renderGroups() {
         let trackerIP = "127.0.0.1";
         let trackerPort = "9000";
@@ -236,58 +235,75 @@
         } catch (err) { console.warn("Lỗi lấy tracker:", err); }
         const currentUsername = getUsername();
 
+        let groupsData = { groups: [] };
+        let useCache = false;
+
         try {
           const res = await fetch(
             `http://${trackerIP}:${trackerPort}/my-groups?username=${encodeURIComponent(currentUsername)}`,
           );
+          
+          if (!res.ok) throw new Error("Tracker returned not ok");
           const data = await res.json();
-
-          const table = document.getElementById("groupsTable");
-          table.innerHTML = `<tr><th>Group Name</th><th>Owner</th><th>Action</th></tr>`;
-
-          if (
-            data.status === "success" &&
-            data.groups &&
-            data.groups.length > 0
-          ) {
-            data.groups.forEach((g) => {
-              const row = table.insertRow();
-              row.insertCell().innerText = g.group_name;
-
-              const isOwner = g.owner === currentUsername;
-              const ownerText = isOwner
-                ? `👑 ${g.owner} (Bạn)`
-                : `👤 ${g.owner}`;
-              row.insertCell().innerText = ownerText;
-
-              // Cột Action chứa các nút bấm
-              const actionCell = row.insertCell();
-
-              // Nút 1: Mở chat (Ai cũng có)
-              const chatBtn = document.createElement("button");
-              chatBtn.innerText = "Open Chat";
-              chatBtn.className = "btn"; // Thêm class cho đẹp
-              chatBtn.onclick = () => {
-                window.location.href = `/chat?group_name=${encodeURIComponent(g.group_name)}`;
-              };
-              actionCell.appendChild(chatBtn);
-
-              // Nút 2: Thêm người (CHỈ TRƯỞNG NHÓM MỚI CÓ)
-              if (isOwner) {
-                const addBtn = document.createElement("button");
-                addBtn.innerText = "➕ Add Member";
-                addBtn.className = "btn btn-secondary";
-                addBtn.style.marginLeft = "10px"; // Cách ra một chút cho đẹp
-                addBtn.onclick = () => inviteToGroup(g.group_name); // Gọi hàm mời
-                actionCell.appendChild(addBtn);
-              }
-            });
-          } else {
-            table.innerHTML +=
-              "<tr><td colspan='3' style='text-align:center;'>You haven't joined any groups yet!</td></tr>";
+          groupsData = data;
+          
+          if (data.status === "success" && data.groups) {
+             localStorage.setItem(`my_groups_${currentUsername}`, JSON.stringify(data.groups));
           }
         } catch (err) {
-          console.error("Lỗi tải danh sách nhóm:", err);
+          console.warn("Lỗi tải danh sách nhóm từ Tracker. Thử lấy từ cache...", err);
+          const cachedStr = localStorage.getItem(`my_groups_${currentUsername}`);
+          if (cachedStr) {
+             groupsData = { status: "success", groups: JSON.parse(cachedStr) };
+             useCache = true;
+          } else {
+             console.error("Không có cache nhóm!");
+          }
+        }
+
+        const table = document.getElementById("groupsTable");
+        table.innerHTML = `<tr><th>Group Name${useCache ? ' (Cached)' : ''}</th><th>Owner</th><th>Action</th></tr>`;
+
+        if (
+          groupsData.status === "success" &&
+          groupsData.groups &&
+          groupsData.groups.length > 0
+        ) {
+          groupsData.groups.forEach((g) => {
+            const row = table.insertRow();
+            row.insertCell().innerText = g.group_name;
+
+            const isOwner = g.owner === currentUsername;
+            const ownerText = isOwner
+              ? `👑 ${g.owner} (Bạn)`
+              : `👤 ${g.owner}`;
+            row.insertCell().innerText = ownerText;
+
+            // Cột Action chứa các nút bấm
+            const actionCell = row.insertCell();
+
+            // Nút 1: Mở chat (Ai cũng có)
+            const chatBtn = document.createElement("button");
+            chatBtn.innerText = "Open Chat";
+            chatBtn.className = "btn"; // Thêm class cho đẹp
+            chatBtn.onclick = () => {
+              window.location.href = `/chat?group_name=${encodeURIComponent(g.group_name)}`;
+            };
+            actionCell.appendChild(chatBtn);
+
+            // Nút 2: Thêm người (CHỈ TRƯỞNG NHÓM MỚI CÓ)
+            if (isOwner) {
+              const addBtn = document.createElement("button");
+              addBtn.innerText = "➕ Add Member";
+              addBtn.className = "btn btn-secondary";
+              addBtn.style.marginLeft = "10px"; // Cách ra một chút cho đẹp
+              addBtn.onclick = () => inviteToGroup(g.group_name); // Gọi hàm mời
+              actionCell.appendChild(addBtn);
+            }
+          });
+        } else {
+          table.innerHTML +=
+            "<tr><td colspan='3' style='text-align:center;'>You haven't joined any groups yet!</td></tr>";
         }
       }
 

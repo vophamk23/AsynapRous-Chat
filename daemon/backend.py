@@ -43,7 +43,7 @@ sel = selectors.DefaultSelector()
 # 1. "callback" : Hướng sự kiện, tiết kiệm RAM, phù hợp hệ thống I/O liên tục.
 # 2. "coroutine": Hiện đại nhất (async/await), tối ưu cao, không kẹt luồng (block).
 # 3. "threading": Đa luồng truyền thống, dễ dùng, tương thích hoàn hảo với logic Chat P2P.
-mode_async = "threading"
+mode_async = "coroutine"
 
 def handle_client(ip, port, conn, addr, routes):
     """
